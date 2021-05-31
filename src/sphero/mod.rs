@@ -63,7 +63,6 @@ pub struct Packet {
     // request_response: bool,
     // request_only_error_response: bool,
     // packet_is_activity: bool,
-
     target: Node,
     // source: Option<Node>,
     device: Device,
@@ -113,35 +112,44 @@ impl Packet {
         buf
     }
 
-    pub fn add_escaped(&self, buf: &mut Vec<u8>, bytes: &[u8]) {
+    fn add_escaped(&self, buf: &mut Vec<u8>, bytes: &[u8]) {
         for b in bytes {
             match *b {
                 ESC => {
                     buf.push(ESC);
                     buf.push(ESC_ESC);
-                },
+                }
                 SOP => {
                     buf.push(ESC);
                     buf.push(ESC_SOP);
-                },
+                }
                 EOP => {
                     buf.push(ESC);
                     buf.push(ESC_EOP);
-                },
+                }
                 _ => {
                     buf.push(*b);
-                },
+                }
             }
         }
     }
 
-    pub fn checksum(&self, bytes: &[u8]) -> u8 {
-        let mut sum : u8 = 0;
+    fn checksum(&self, bytes: &[u8]) -> u8 {
+        let mut sum: u8 = 0;
         for b in bytes {
             sum += b;
         }
         sum ^ 0xff
     }
+}
 
-    // TODO: add tests
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new() {
+        let p = Packet::new(Device::SomeDevice1, Command::SomeCommand1, 22, vec![1, 2, 3]);
+        assert_eq!(p.seq_no, 22);
+    }
 }
