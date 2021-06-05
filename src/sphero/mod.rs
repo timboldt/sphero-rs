@@ -43,12 +43,12 @@ bitflags! {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Command {
     SomeCommand1 = 0x01,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Device {
     SomeDevice1 = 0x01,
 }
@@ -150,6 +150,29 @@ mod tests {
     #[test]
     fn test_new() {
         let p = Packet::new(Device::SomeDevice1, Command::SomeCommand1, 22, vec![1, 2, 3]);
+        assert_eq!(p.target.node_id, 0);
+        assert_eq!(p.target.port_id, 0);
+        assert_eq!(p.device, Device::SomeDevice1);
+        assert_eq!(p.command, Command::SomeCommand1);
         assert_eq!(p.seq_no, 22);
+        assert_eq!(p.payload, vec![1, 2, 3]);
     }
+
+    #[test]
+    fn test_serialize() {
+        let p = Packet::new(Device::SomeDevice1, Command::SomeCommand1, 22, vec![1, 2, 3]);
+        let s = p.serialize();
+        assert_eq!(s, vec![
+            SOP,
+            0b00010010,
+            0x00,
+            Device::SomeDevice1 as u8,
+            Command::SomeCommand1 as u8,
+            22,
+            1, 2, 3,
+            p.checksum(&s[1..=8]),
+            EOP]);
+    }
+
+    // TODO: test escape sequences, etc.
 }
