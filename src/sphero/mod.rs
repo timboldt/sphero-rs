@@ -1,4 +1,8 @@
 use bitflags::bitflags;
+use global_counter::primitive::exact::CounterU8;
+
+static SEQ_NO_COUNTER : CounterU8 = CounterU8::new(0);
+
 //use byteorder::{BigEndian, WriteBytesExt};
 
 const ESC: u8 = 0xAB;
@@ -63,32 +67,41 @@ struct Node {
 
 #[derive(Debug)]
 pub struct Packet {
-    // is_response: bool,
-    // request_response: bool,
-    // request_only_error_response: bool,
-    // packet_is_activity: bool,
-    target: Node,
-    // source: Option<Node>,
     device: Device,
     command: Command,
+    flags: Flags,
+    source: Option<Node>,
+    target: Option<Node>,
     seq_no: u8,
-    // err_code: Option<u8>,
+    err_code: Option<u8>,
     payload: Vec<u8>,
 }
 
 impl Packet {
-    pub fn new(device: Device, command: Command, seq_no: u8, payload: Vec<u8>) -> Packet {
+    pub fn new(device: Device, command: Command, payload: Vec<u8>) -> Packet {
+        SEQ_NO_COUNTER.inc();
         Packet {
-            target: Node {
-                // TODO: use a proper node id.
-                port_id: 0,
-                node_id: 0,
-            },
             device: device,
             command: command,
-            seq_no: seq_no,
+            flags: Flags::REQUEST_RESPONSE|Flags::IS_ACTIVITY,
+            source: None,
+            target: None,
+            seq_no: SEQ_NO_COUNTER.get(),
+            err_code: None,
             payload: payload,
         }
+    }
+
+    pub fn source<'a>(&'a mut self, source: Node) -> &'a mut Packet {
+        self.source = Some(source);
+        self.flags |= Flags::HAS_SOURCE;
+        self
+    }
+
+    pub fn target<'a>(&'a mut self, target: Node) -> &'a mut Packet {
+        self.target = Some(target);
+        self.flags |= Flags::HAS_TARGET;
+        self
     }
 
     pub fn deserialize(bytes: &[u8]) -> Result<Packet, &'static str> {
@@ -198,14 +211,13 @@ impl Packet {
             return Err("Unexpected end of packet");
         }
         Ok(Packet {
-            target: Node {
-                // TODO: use a proper node id.
-                port_id: 0,
-                node_id: 0,
-            },
             device: Device::InvalidDevice,
             command: Command::InvalidCommand,
-            seq_no: 0x00,
+            flags: flags,
+            source: None,
+            target: None,
+            seq_no: 0,
+            err_code: None,
             payload: vec![],
         })
     }
@@ -224,8 +236,10 @@ impl Packet {
         // EOP	End of Packet	Control byte identifying the end of the packet
         let mut buf = vec![];
         buf.push(SOP);
-        buf.push((Flags::REQUEST_RESPONSE | Flags::HAS_TARGET).bits);
-        buf.push((self.target.port_id << 4) | self.target.node_id);
+        buf.push(self.flags.bits);
+        if let Some(target) = &self.target {
+            buf.push((target.port_id << 4) | target.node_id);
+        }
         buf.push(self.device as u8);
         buf.push(self.command as u8);
         buf.push(self.seq_no);
@@ -275,14 +289,12 @@ mod tests {
         let p = Packet::new(
             Device::SomeDevice1,
             Command::SomeCommand1,
-            22,
             vec![1, 2, 3],
         );
-        assert_eq!(p.target.node_id, 0);
-        assert_eq!(p.target.port_id, 0);
+        assert!(p.target.is_none());
         assert_eq!(p.device, Device::SomeDevice1);
         assert_eq!(p.command, Command::SomeCommand1);
-        assert_eq!(p.seq_no, 22);
+        assert_eq!(p.seq_no, SEQ_NO_COUNTER.get());
         assert_eq!(p.payload, vec![1, 2, 3]);
     }
 
@@ -291,7 +303,6 @@ mod tests {
         let p = Packet::new(
             Device::SomeDevice1,
             Command::SomeCommand1,
-            22,
             vec![1, 2, 3],
         );
         let s = p.serialize();
@@ -303,7 +314,7 @@ mod tests {
                 0x00,
                 Device::SomeDevice1 as u8,
                 Command::SomeCommand1 as u8,
-                22,
+                SEQ_NO_COUNTER.get(),
                 1,
                 2,
                 3,
