@@ -1,5 +1,5 @@
 use bitflags::bitflags;
-use byteorder::{BigEndian, WriteBytesExt};
+//use byteorder::{BigEndian, WriteBytesExt};
 
 const ESC: u8 = 0xAB;
 const SOP: u8 = 0x8D;
@@ -45,19 +45,23 @@ bitflags! {
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Command {
+    InvalidCommand = 0x00,
     SomeCommand1 = 0x01,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Device {
+    InvalidDevice = 0x00,
     SomeDevice1 = 0x01,
 }
 
+#[derive(Debug)]
 struct Node {
     port_id: u8,
     node_id: u8,
 }
 
+#[derive(Debug)]
 pub struct Packet {
     // is_response: bool,
     // request_response: bool,
@@ -85,6 +89,125 @@ impl Packet {
             seq_no: seq_no,
             payload: payload,
         }
+    }
+
+    pub fn deserialize(bytes: &[u8]) -> Result<Packet, &'static str> {
+        #[derive(Debug, Copy, Clone, PartialEq)]
+        enum State {
+            AtStart,
+            AtFlags,
+            AtTarget,
+            AtSource,
+            AtDevice,
+            AtCommand,
+            AtSeqNo,
+            AtErr,
+            AtData,
+            AtChecksum,
+            AtEnd,
+            Validated,
+        }
+        let mut n = 0;
+        let mut state = State::AtStart;
+        let mut flags = Flags::empty();
+        while n < bytes.len() {
+            match state {
+                State::AtStart => {
+                    if bytes[n] == SOP {
+                        state = State::AtFlags;
+                    } else {
+                        return Err("SOP not found");
+                    }
+                }
+                State::AtFlags => {
+                    // TODO: don't panic here.
+                    flags = Flags::from_bits(bytes[n]).unwrap();
+        // // Packet is a Response
+        // // True: Packet is a response. This implies that the packet has the error code byte in the header.
+        // // False: Packet is a command.
+        // const IS_RESPONSE = 0b00000001;
+        // // Request Response
+        // // True: Request response to a command (only valid if the packet is a command).
+        // // False: Do not request any response.
+        // const REQUEST_RESPONSE = 0b00000010;
+        // // Request Only Error Response
+        // // True: Request response only if command results in an error (only valid if packet is a command and "Request Response" flag is set).
+        // // False: Do not request only error responses.
+        // const ONLY_ERROR_RESPONSE = 0b00000100;
+
+        // // Extended Flags
+        // // True: The next header byte is extended flags.
+        // // False: This is the last flags byte.
+        // const EXTENDED_FLAGS = 0b10000000;
+                    // TODO: save flags?
+                    // TODO: determine next step based on flags
+                    if flags.contains(Flags::HAS_TARGET) {
+                        state = State::AtTarget;
+                    } else if flags.contains(Flags::HAS_SOURCE) {
+                        state = State::AtSource;
+                    } else {
+                        state = State::AtDevice;
+                    }
+                }
+                State::AtTarget  => {
+                    if flags.contains(Flags::HAS_SOURCE) {
+                        state = State::AtSource;
+                    } else {
+                        state = State::AtDevice;
+                    }
+                },
+                State::AtSource  => {
+                    state = State::AtDevice;
+                },
+                State::AtDevice  => {
+                    state = State::AtCommand;
+                },
+                State::AtCommand  => {
+                    state = State::AtSeqNo;
+                },
+                State::AtSeqNo  => {
+                    if flags.contains(Flags::IS_RESPONSE) {
+                        state = State::AtErr;
+                    } else {
+                        state = State::AtData;
+                    }
+                },
+                State::AtErr  => {
+                    state = State::AtData;
+                },
+                State::AtData  => {
+                    state = State::AtChecksum;
+                },
+                State::AtChecksum  => {
+                    state = State::AtEnd;
+                },
+                State::AtEnd => {
+                    if bytes[n] == EOP {
+                        state = State::Validated;
+                    } else {
+                        return Err("EOP not found");
+                    }
+                }
+                State::Validated => {
+                    return Err("Unexpected bytes after end of packet");
+                }
+            };
+            n += 1;
+        }
+        if state != State::Validated {
+            return Err("Unexpected end of packet");
+        }
+        Ok(Packet {
+            target: Node {
+                // TODO: use a proper node id.
+                port_id: 0,
+                node_id: 0,
+            },
+            device: Device::InvalidDevice,
+            command: Command::InvalidCommand,
+            seq_no: 0x00,
+            payload: vec![],
+        })
     }
 
     pub fn serialize(&self) -> Vec<u8> {
@@ -149,7 +272,12 @@ mod tests {
 
     #[test]
     fn test_new() {
-        let p = Packet::new(Device::SomeDevice1, Command::SomeCommand1, 22, vec![1, 2, 3]);
+        let p = Packet::new(
+            Device::SomeDevice1,
+            Command::SomeCommand1,
+            22,
+            vec![1, 2, 3],
+        );
         assert_eq!(p.target.node_id, 0);
         assert_eq!(p.target.port_id, 0);
         assert_eq!(p.device, Device::SomeDevice1);
@@ -160,18 +288,46 @@ mod tests {
 
     #[test]
     fn test_serialize() {
-        let p = Packet::new(Device::SomeDevice1, Command::SomeCommand1, 22, vec![1, 2, 3]);
+        let p = Packet::new(
+            Device::SomeDevice1,
+            Command::SomeCommand1,
+            22,
+            vec![1, 2, 3],
+        );
         let s = p.serialize();
-        assert_eq!(s, vec![
+        assert_eq!(
+            s,
+            vec![
+                SOP,
+                0b00010010,
+                0x00,
+                Device::SomeDevice1 as u8,
+                Command::SomeCommand1 as u8,
+                22,
+                1,
+                2,
+                3,
+                p.checksum(&s[1..=8]),
+                EOP
+            ]
+        );
+    }
+
+    #[test]
+    fn test_deserialize() {
+        let p = Packet::deserialize(&vec![
             SOP,
             0b00010010,
             0x00,
             Device::SomeDevice1 as u8,
             Command::SomeCommand1 as u8,
             22,
-            1, 2, 3,
-            p.checksum(&s[1..=8]),
-            EOP]);
+            1,
+            123,
+            EOP
+        ]);
+        println!("{:?}", p);
+        assert!(p.is_ok());
     }
 
     // TODO: test escape sequences, etc.
