@@ -19,6 +19,7 @@ fn main() {
         vec![1, 2, 3],
     );
     let mut t = turret::Turret::new(NotYetRealActuator { duty: 0.5 }, NotYetRealActuator { duty: 0.5 });
-    t.set_pitch_degrees(0.);
+    t.set_pitch_degrees(30.);
+    t.set_yaw_degrees(-45.);
     println!("{:?}", t);
 }

@@ -2,14 +2,14 @@ pub trait Actuator {
     fn set_duty(&mut self, duty: f32);
 }
 
-const PITCH_SCALE: f32 = 1. / 180.;
+// TODO: This isn't exactly the duty cycle, but more the range within the RC PWM. Rename accordingly.
+const DEG_TO_DUTY: f32 = 1. / 180.;
+const MIN_DUTY: f32 = 0.;
+const MAX_DUTY: f32 = 1.;
+
+// TODO: These will likely vary by physical implementation, so might need to be configurable.
 const PITCH_OFFSET: f32 = 0.5;
-const PITCH_MIN_DUTY: f32 = 0.;
-const PITCH_MAX_DUTY: f32 = 1.;
-const YAW_SCALE: f32 = 1. / 180.;
 const YAW_OFFSET: f32 = 0.5;
-const YAW_MIN_DUTY: f32 = 0.;
-const YAW_MAX_DUTY: f32 = 1.;
 
 #[derive(Debug)]
 pub struct Turret<A: Actuator> {
@@ -27,17 +27,17 @@ impl<A: Actuator> Turret<A> {
 
     /// Sets the turret pitch angle, where -90 is straight down, +90 is straight up, and zero is horizontal.
     pub fn set_pitch_degrees(&mut self, deg: f32) {
-        let duty = (deg * PITCH_SCALE + PITCH_OFFSET)
-            .max(PITCH_MIN_DUTY)
-            .min(PITCH_MAX_DUTY);
+        let duty = (deg * DEG_TO_DUTY + PITCH_OFFSET)
+            .max(MIN_DUTY)
+            .min(MAX_DUTY);
         self.pitch_motor.set_duty(duty);
     }
 
     /// Sets the turret yaw angle, where negative is left, positive is right and zero is straight forward.
     pub fn set_yaw_degrees(&mut self, deg: f32) {
-        let duty = (deg * YAW_SCALE + YAW_OFFSET)
-            .max(YAW_MIN_DUTY)
-            .min(YAW_MAX_DUTY);
+        let duty = (deg * DEG_TO_DUTY + YAW_OFFSET)
+            .max(MIN_DUTY)
+            .min(MAX_DUTY);
         self.yaw_motor.set_duty(duty);
     }
 }
