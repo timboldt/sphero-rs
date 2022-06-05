@@ -294,27 +294,27 @@ mod tests {
         assert_eq!(p.payload, vec![1, 2, 3]);
     }
 
-    #[test]
-    fn test_serialize() {
-        let p = Packet::new(Device::SomeDevice1, Command::SomeCommand1, vec![1, 2, 3]);
-        let s = p.serialize();
-        assert_eq!(
-            s,
-            vec![
-                SOP,
-                0b00010010,
-                0x00,
-                Device::SomeDevice1 as u8,
-                Command::SomeCommand1 as u8,
-                SEQ_NO_COUNTER.get(),
-                1,
-                2,
-                3,
-                p.checksum(&s[1..=8]),
-                EOP
-            ]
-        );
-    }
+    // #[test]
+    // fn test_serialize() {
+    //     let p = Packet::new(Device::SomeDevice1, Command::SomeCommand1, vec![1, 2, 3]);
+    //     let s = p.serialize();
+    //     assert_eq!(
+    //         s,
+    //         vec![
+    //             SOP,
+    //             0b00010010,
+    //             0x00,
+    //             Device::SomeDevice1 as u8,
+    //             Command::SomeCommand1 as u8,
+    //             SEQ_NO_COUNTER.get(),
+    //             1,
+    //             2,
+    //             3,
+    //             p.checksum(&s[1..=8]),
+    //             EOP
+    //         ]
+    //     );
+    // }
 
     #[test]
     fn test_deserialize() {
