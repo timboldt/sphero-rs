@@ -1,7 +1,7 @@
 use bitflags::bitflags;
 use global_counter::primitive::exact::CounterU8;
 
-static SEQ_NO_COUNTER : CounterU8 = CounterU8::new(0);
+static SEQ_NO_COUNTER: CounterU8 = CounterU8::new(0);
 
 //use byteorder::{BigEndian, WriteBytesExt};
 
@@ -83,7 +83,7 @@ impl Packet {
         Packet {
             device: device,
             command: command,
-            flags: Flags::REQUEST_RESPONSE|Flags::IS_ACTIVITY,
+            flags: Flags::REQUEST_RESPONSE | Flags::IS_ACTIVITY,
             source: None,
             target: None,
             seq_no: SEQ_NO_COUNTER.get(),
@@ -135,23 +135,23 @@ impl Packet {
                 State::AtFlags => {
                     // TODO: don't panic here.
                     flags = Flags::from_bits(bytes[n]).unwrap();
-        // // Packet is a Response
-        // // True: Packet is a response. This implies that the packet has the error code byte in the header.
-        // // False: Packet is a command.
-        // const IS_RESPONSE = 0b00000001;
-        // // Request Response
-        // // True: Request response to a command (only valid if the packet is a command).
-        // // False: Do not request any response.
-        // const REQUEST_RESPONSE = 0b00000010;
-        // // Request Only Error Response
-        // // True: Request response only if command results in an error (only valid if packet is a command and "Request Response" flag is set).
-        // // False: Do not request only error responses.
-        // const ONLY_ERROR_RESPONSE = 0b00000100;
+                    // // Packet is a Response
+                    // // True: Packet is a response. This implies that the packet has the error code byte in the header.
+                    // // False: Packet is a command.
+                    // const IS_RESPONSE = 0b00000001;
+                    // // Request Response
+                    // // True: Request response to a command (only valid if the packet is a command).
+                    // // False: Do not request any response.
+                    // const REQUEST_RESPONSE = 0b00000010;
+                    // // Request Only Error Response
+                    // // True: Request response only if command results in an error (only valid if packet is a command and "Request Response" flag is set).
+                    // // False: Do not request only error responses.
+                    // const ONLY_ERROR_RESPONSE = 0b00000100;
 
-        // // Extended Flags
-        // // True: The next header byte is extended flags.
-        // // False: This is the last flags byte.
-        // const EXTENDED_FLAGS = 0b10000000;
+                    // // Extended Flags
+                    // // True: The next header byte is extended flags.
+                    // // False: This is the last flags byte.
+                    // const EXTENDED_FLAGS = 0b10000000;
                     // TODO: save flags?
                     // TODO: determine next step based on flags
                     if flags.contains(Flags::HAS_TARGET) {
@@ -162,38 +162,38 @@ impl Packet {
                         state = State::AtDevice;
                     }
                 }
-                State::AtTarget  => {
+                State::AtTarget => {
                     if flags.contains(Flags::HAS_SOURCE) {
                         state = State::AtSource;
                     } else {
                         state = State::AtDevice;
                     }
-                },
-                State::AtSource  => {
+                }
+                State::AtSource => {
                     state = State::AtDevice;
-                },
-                State::AtDevice  => {
+                }
+                State::AtDevice => {
                     state = State::AtCommand;
-                },
-                State::AtCommand  => {
+                }
+                State::AtCommand => {
                     state = State::AtSeqNo;
-                },
-                State::AtSeqNo  => {
+                }
+                State::AtSeqNo => {
                     if flags.contains(Flags::IS_RESPONSE) {
                         state = State::AtErr;
                     } else {
                         state = State::AtData;
                     }
-                },
-                State::AtErr  => {
+                }
+                State::AtErr => {
                     state = State::AtData;
-                },
-                State::AtData  => {
+                }
+                State::AtData => {
                     state = State::AtChecksum;
-                },
-                State::AtChecksum  => {
+                }
+                State::AtChecksum => {
                     state = State::AtEnd;
-                },
+                }
                 State::AtEnd => {
                     if bytes[n] == EOP {
                         state = State::Validated;
@@ -286,11 +286,7 @@ mod tests {
 
     #[test]
     fn test_new() {
-        let p = Packet::new(
-            Device::SomeDevice1,
-            Command::SomeCommand1,
-            vec![1, 2, 3],
-        );
+        let p = Packet::new(Device::SomeDevice1, Command::SomeCommand1, vec![1, 2, 3]);
         assert!(p.target.is_none());
         assert_eq!(p.device, Device::SomeDevice1);
         assert_eq!(p.command, Command::SomeCommand1);
@@ -300,11 +296,7 @@ mod tests {
 
     #[test]
     fn test_serialize() {
-        let p = Packet::new(
-            Device::SomeDevice1,
-            Command::SomeCommand1,
-            vec![1, 2, 3],
-        );
+        let p = Packet::new(Device::SomeDevice1, Command::SomeCommand1, vec![1, 2, 3]);
         let s = p.serialize();
         assert_eq!(
             s,
@@ -335,7 +327,7 @@ mod tests {
             22,
             1,
             123,
-            EOP
+            EOP,
         ]);
         println!("{:?}", p);
         assert!(p.is_ok());
