@@ -65,20 +65,12 @@ fn main() {
         RealActuator::new(pwm.clone(), Channel::C1),
     );
 
-    t.set_pitch_degrees(-90.);
-    t.set_yaw_degrees(-90.);
-
-    thread::sleep(Duration::from_millis(3000));
-
-    t.set_pitch_degrees(0.);
-    t.set_yaw_degrees(0.);
-
-    thread::sleep(Duration::from_millis(3000));
-
-    t.set_pitch_degrees(90.);
-    t.set_yaw_degrees(90.);
-
-    thread::sleep(Duration::from_millis(3000));
+    t.set_pitch_degrees(60.);
+    for i in -9..=9 {
+        let deg = i as f32 * 10.;
+        t.set_yaw_degrees(deg);
+        thread::sleep(Duration::from_millis(1000));
+    }
 
     disable_pwm(pwm);
 }
