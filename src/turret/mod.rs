@@ -1,25 +1,22 @@
 pub trait Actuator {
-    fn set_duty(&mut self, duty: f32);
+    fn set_pulse_ms(&mut self, pulse: f32);
 }
 
-// TODO: This isn't exactly the duty cycle, but more the range within the RC PWM. Rename accordingly.
-const DEG_TO_DUTY: f32 = 1. / 180.;
-const MIN_DUTY: f32 = 0.;
-const MAX_DUTY: f32 = 1.;
-
-// TODO: These will likely vary by physical implementation, so might need to be configurable.
-const PITCH_OFFSET: f32 = 0.5;
-const YAW_OFFSET: f32 = 0.5;
+const MIN_PULSE: f32 = 0.5;
+const CENTER_PULSE: f32 = 1.5;
+const MAX_PULSE: f32 = 2.5;
 
 #[derive(Debug)]
 pub struct Turret<A: Actuator> {
+    deg_to_ms: f32,
     pitch_motor: A,
     yaw_motor: A,
 }
 
 impl<A: Actuator> Turret<A> {
-    pub fn new(pitch_motor: A, yaw_motor: A) -> Turret<A> {
+    pub fn new(deg_to_ms: f32, pitch_motor: A, yaw_motor: A) -> Turret<A> {
         Turret {
+            deg_to_ms,
             pitch_motor,
             yaw_motor,
         }
@@ -27,18 +24,18 @@ impl<A: Actuator> Turret<A> {
 
     /// Sets the turret pitch angle, where -90 is straight down, +90 is straight up, and zero is horizontal.
     pub fn set_pitch_degrees(&mut self, deg: f32) {
-        let duty = (deg * DEG_TO_DUTY + PITCH_OFFSET)
-            .max(MIN_DUTY)
-            .min(MAX_DUTY);
-        self.pitch_motor.set_duty(duty);
+        let pulse = (deg * self.deg_to_ms + CENTER_PULSE)
+            .max(MIN_PULSE)
+            .min(MAX_PULSE);
+        self.pitch_motor.set_pulse_ms(pulse);
     }
 
     /// Sets the turret yaw angle, where negative is left, positive is right and zero is straight forward.
     pub fn set_yaw_degrees(&mut self, deg: f32) {
-        let duty = (deg * DEG_TO_DUTY + YAW_OFFSET)
-            .max(MIN_DUTY)
-            .min(MAX_DUTY);
-        self.yaw_motor.set_duty(duty);
+        let pulse = (deg * self.deg_to_ms + CENTER_PULSE)
+            .max(MIN_PULSE)
+            .min(MAX_PULSE);
+        self.yaw_motor.set_pulse_ms(pulse);
     }
 }
 
@@ -81,67 +78,77 @@ mod tests {
     }
 
     pub struct DummyActuator {
-        duty: f32,
+        pulse: f32,
     }
 
     impl Actuator for DummyActuator {
-        fn set_duty(&mut self, duty: f32) {
-            self.duty = duty;
+        fn set_pulse_ms(&mut self, pulse: f32) {
+            self.pulse = pulse;
         }
     }
 
     #[test]
     fn test_new() {
-        let t = Turret::new(DummyActuator { duty: 0.314 }, DummyActuator { duty: 0.999 });
-        assert_near!(t.pitch_motor.duty, 0.314);
-        assert_near!(t.yaw_motor.duty, 0.999);
+        let t = Turret::new(
+            1. / 180.,
+            DummyActuator { pulse: 0.314 },
+            DummyActuator { pulse: 0.999 },
+        );
+        assert_near!(t.pitch_motor.pulse, 0.314);
+        assert_near!(t.yaw_motor.pulse, 0.999);
     }
 
     #[test]
     fn test_pitch() {
-        let mut t = Turret::new(DummyActuator { duty: 0.1 }, DummyActuator { duty: 0.5 });
+        let mut t = Turret::new(
+            1. / 180.,
+            DummyActuator { pulse: 0.1 },
+            DummyActuator { pulse: 0.5 },
+        );
 
         // Make sure pitch works.
-        t.set_pitch_degrees(-99.);
-        assert_near!(t.pitch_motor.duty, 0.);
+        t.set_pitch_degrees(-90.);
+        assert_near!(t.pitch_motor.pulse, 1.0);
         t.set_pitch_degrees(-89.);
-        assert_near!(t.pitch_motor.duty, 1. / 180.);
+        assert_near!(t.pitch_motor.pulse, 1.0 + 1. / 180.);
         t.set_pitch_degrees(-45.);
-        assert_near!(t.pitch_motor.duty, 0.25);
+        assert_near!(t.pitch_motor.pulse, 1.25);
         t.set_pitch_degrees(0.);
-        assert_near!(t.pitch_motor.duty, 0.5);
+        assert_near!(t.pitch_motor.pulse, 1.5);
         t.set_pitch_degrees(45.);
-        assert_near!(t.pitch_motor.duty, 0.75);
+        assert_near!(t.pitch_motor.pulse, 1.75);
         t.set_pitch_degrees(90.);
-        assert_near!(t.pitch_motor.duty, 1.);
-        t.set_pitch_degrees(100.);
-        assert_near!(t.pitch_motor.duty, 1.);
+        assert_near!(t.pitch_motor.pulse, 2.0);
+        t.set_pitch_degrees(200.);
+        assert_near!(t.pitch_motor.pulse, MAX_PULSE);
 
         // Make sure yaw wasn't affected.
-        assert_near!(t.yaw_motor.duty, 0.5);
+        assert_near!(t.yaw_motor.pulse, 0.5);
     }
 
     #[test]
     fn test_yaw() {
-        let mut t = Turret::new(DummyActuator { duty: 0.25 }, DummyActuator { duty: 0.3 });
+        let mut t = Turret::new(
+            1. / 180.,
+            DummyActuator { pulse: 0.25 },
+            DummyActuator { pulse: 0.3 },
+        );
 
         // Make sure yaw works.
-        t.set_yaw_degrees(-99.);
-        assert_near!(t.yaw_motor.duty, 0.);
-        t.set_yaw_degrees(-89.);
-        assert_near!(t.yaw_motor.duty, 1. / 180.);
+        t.set_yaw_degrees(-200.);
+        assert_near!(t.yaw_motor.pulse, MIN_PULSE);
+        t.set_yaw_degrees(-90.);
+        assert_near!(t.yaw_motor.pulse, 1.0);
         t.set_yaw_degrees(-45.);
-        assert_near!(t.yaw_motor.duty, 0.25);
+        assert_near!(t.yaw_motor.pulse, 1.25);
         t.set_yaw_degrees(0.);
-        assert_near!(t.yaw_motor.duty, 0.5);
+        assert_near!(t.yaw_motor.pulse, 1.5);
         t.set_yaw_degrees(45.);
-        assert_near!(t.yaw_motor.duty, 0.75);
+        assert_near!(t.yaw_motor.pulse, 1.75);
         t.set_yaw_degrees(90.);
-        assert_near!(t.yaw_motor.duty, 1.);
-        t.set_yaw_degrees(100.);
-        assert_near!(t.yaw_motor.duty, 1.);
+        assert_near!(t.yaw_motor.pulse, 2.);
 
         // Make sure pitch wasn't affected.
-        assert_near!(t.pitch_motor.duty, 0.25);
+        assert_near!(t.pitch_motor.pulse, 0.25);
     }
 }
